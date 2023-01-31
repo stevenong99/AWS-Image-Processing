@@ -3,9 +3,7 @@ from fastapi import FastAPI, Request, status, File
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.encoders import jsonable_encoder
-from fastapi.openapi.docs import (
-    get_swagger_ui_html,
-)
+from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.staticfiles import StaticFiles
 from io import BytesIO
 from pydantic import validator, BaseModel
@@ -50,6 +48,8 @@ app = FastAPI(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
+"""============Setting Up the Documentation============"""
+
 @app.get("/docs", include_in_schema=False)
 async def custom_swagger_ui_html():
     return get_swagger_ui_html(
@@ -74,6 +74,8 @@ async def request_validation_exception_handler(
     )
 
 
+"""============Image Validation Function============"""
+
 def valid_b64_image(b64_image):
     try:
         img = b64_decode_img(b64_image)
@@ -90,7 +92,6 @@ def valid_b64_image(b64_image):
 
 """============Redirect to Docs============"""
 
-
 @app.get("/", tags=["index"])
 def index():
     api_logger.logger.info("Index page called")
@@ -98,7 +99,6 @@ def index():
 
 
 """============Object Detection============"""
-
 
 class DetectionRequestIn(BaseModel):
     b64_image: Union[str, None]
