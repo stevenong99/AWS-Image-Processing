@@ -1,6 +1,8 @@
 # AWS Object Detection
 Simple FastAPI object detection service deployed in AWS EC2. As of this commit, the API can be accessed from here: http://54.251.190.86/
 
+You can find sample images and their base64 counterparts here: [sample_images](sample_images/)
+
 # POST Endpoint: http://54.251.190.86/detect-objects
 Takes a base64 encoded image detects the objects within them, then returns the list of objects found in the image along with their bounding box coordinates.
 
