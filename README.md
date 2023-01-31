@@ -1,7 +1,7 @@
 # AWS Object Detection
 Simple FastAPI object detection service deployed in AWS EC2. As of this commit, the API can be accessed from here: http://54.251.190.86/
 
-# POST Endpoint: /detect-objects
+# POST Endpoint: http://54.251.190.86/detect-objects
 Takes a base64 encoded image detects the objects within them, then returns the list of objects found in the image along with their bounding box coordinates.
 
 ## Supported image formats: jpeg/jpg/png
@@ -12,6 +12,18 @@ Takes a base64 encoded image detects the objects within them, then returns the l
   "b64_image": "Image to be processed of format jpeg/jpg/png encoded into a base 64 string"
 }
 ```
+
+## Curl
+```
+curl -X 'POST' \
+  'http://54.251.190.86/detect-objects' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "b64_image": "Image to be processed of format jpeg/jpg/png encoded into a base 64 string"
+}'
+
+  ```
 
 ## Expected Response
 ```
@@ -57,13 +69,23 @@ Takes a base64 encoded image detects the objects within them, then returns the l
 ```
 
 
-# POST Endpoint: /detect-objects-upload
+# POST Endpoint: http://54.251.190.86/detect-objects-upload
 Allows uploading of an image instead of base64. Takes a base64 encoded image detects the objects within them, then returns the list of objects found in the image along with their bounding box coordinates.
 
 ## Request Body
 ```
 requires an uploaded image file
 ```
+
+## Curl
+```
+curl -X 'POST' \
+  'http://54.251.190.86/detect-objects-upload' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: multipart/form-data' \
+  -F 'file='
+
+  ```
 
 ## Expected Response
 ```
