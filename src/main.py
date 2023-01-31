@@ -1,21 +1,20 @@
-from fastapi import FastAPI, Request, status, File, UploadFile
+import cv2
+from fastapi import FastAPI, Request, status, File
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse, RedirectResponse
 from fastapi.encoders import jsonable_encoder
 from fastapi.openapi.docs import (
     get_swagger_ui_html,
-    get_swagger_ui_oauth2_redirect_html,
 )
 from fastapi.staticfiles import StaticFiles
 from io import BytesIO
-from pydantic import Field, validator, BaseModel
+from pydantic import validator, BaseModel
 import PIL
 from PIL import Image
 from typing import Union
 
 from logging_utils import api_logger
-from utilities import b64_decode_img, b64_decode_audio
-from translation_utils import translate
+from utilities import b64_decode_img
 from object_detection_utils import detect_objects
 
 tags_metadata = [
@@ -30,10 +29,6 @@ tags_metadata = [
     {
         "name": "detect_objects_upload",
         "description": "Allows uploading of an image instead of base64. Takes a base64 encoded image detects the objects within them, then returns the list of objects found in the image along with their bounding box coordinates",
-    },
-    {
-        "name": "translate_audio",
-        "description": "Takes a base64 encoded audio file in any language, transcribes it, then translates it into English, and returns the translation",
     },
 ]
 
@@ -66,11 +61,6 @@ async def custom_swagger_ui_html():
     )
 
 
-@app.get(app.swagger_ui_oauth2_redirect_url, include_in_schema=False)
-async def swagger_ui_redirect():
-    return get_swagger_ui_oauth2_redirect_html()
-
-
 @app.exception_handler(RequestValidationError)
 async def request_validation_exception_handler(
     request: Request, exc: RequestValidationError
@@ -98,21 +88,8 @@ def valid_b64_image(b64_image):
     return b64_image
 
 
-def valid_b64_audio(b64_audio):
-    try:
-        audio = b64_decode_audio(b64_audio)
-    except Exception as err:
-        api_logger.logger.error("Invalid base64 string")
-        api_logger.logger.exception(err)
-        raise ValueError("Invalid base64 string")
-
-    if audio is None:
-        raise ValueError("No audio/invalid audio found")
-
-    return b64_audio
-
-
 """============Redirect to Docs============"""
+
 
 @app.get("/", tags=["index"])
 def index():
@@ -121,6 +98,7 @@ def index():
 
 
 """============Object Detection============"""
+
 
 class DetectionRequestIn(BaseModel):
     b64_image: Union[str, None]
@@ -133,24 +111,28 @@ class DetectionRequestIn(BaseModel):
             }
         }
 
+
 class DetectionResponseOut(BaseModel):
     detection_result: list[dict]
     errors: dict
 
-
+# This endpoint takes images in the form of base64 strings
 @app.post(
     "/detect-objects", response_model=DetectionResponseOut, tags=["detect_objects"]
 )
-def object_detection(detection_request:DetectionRequestIn):
+def object_detection(detection_request: DetectionRequestIn):
     api_logger.logger.info("Object detection called")
     b64_image = detection_request.b64_image
 
     try:
-        image = Image.fromarray(b64_decode_img(b64_image))
+        # Converting from base64 to PIL.Image
+        image = Image.fromarray(cv2.cvtColor(b64_decode_img(b64_image), cv2.COLOR_BGR2RGB))
 
+        # Object detection occurs here
         result = detect_objects(image, save=True)
         api_logger.logger.info(f"Object detection results: {result}")
 
+        # The result is put into the response and sent back to the user
         response = DetectionResponseOut(
             detection_result=result, errors={"Errors": "None"}
         )
@@ -161,12 +143,17 @@ def object_detection(detection_request:DetectionRequestIn):
         result = {
             "error": str(e),
         }
-        response = DetectionResponseOut(detection_result=[{"ERROR":"An error occurred"}], errors=result)
+        # The error is returned if any kind of exception occurs
+        response = DetectionResponseOut(
+            detection_result=[{"ERROR": "An error occurred"}], errors=result
+        )
         return response
 
-
+# This endpoint takes images in the form of uploaded images in a multipart request
 @app.post(
-    "/detect-objects-upload", response_model=DetectionResponseOut, tags=["detect_objects_upload"]
+    "/detect-objects-upload",
+    response_model=DetectionResponseOut,
+    tags=["detect_objects_upload"],
 )
 def object_detection_upload(file: Union[bytes, None] = File(default=None)):
     api_logger.logger.info("Object detection called")
@@ -187,7 +174,9 @@ def object_detection_upload(file: Union[bytes, None] = File(default=None)):
         result = {
             "error": "File uploaded is not an image supported by PIL",
         }
-        response = DetectionResponseOut(detection_result=[{"ERROR":"An error occurred"}], errors=result)
+        response = DetectionResponseOut(
+            detection_result=[{"ERROR": "An error occurred"}], errors=result
+        )
         return response
     except Exception as e:
         api_logger.logger.error("Object detection failed")
@@ -195,90 +184,7 @@ def object_detection_upload(file: Union[bytes, None] = File(default=None)):
         result = {
             "error": str(e),
         }
-        response = DetectionResponseOut(detection_result=[{"ERROR":"An error occurred"}], errors=result)
-        return response
-
-
-"""============Audio Translation============"""
-
-class AudioTranslationRequestIn(BaseModel):
-    b64_audio: Union[str, None]
-    _validb64_audio = validator("b64_audio", allow_reuse=True)(valid_b64_audio)
-
-    class Config:
-        schema_extra = {
-            "example": {
-                "b64_audio": "Audio to be processed of format wav/mp3 encoded into a base 64 string",
-            }
-        }
-
-class AudioTranslationRequestOut(BaseModel):
-    detected_language: str
-    translation: str
-    errors: dict
-
-
-@app.post(
-    "/translate-audio",
-    response_model=AudioTranslationRequestOut,
-    tags=["translate_audio"],
-)
-def translate_audio(translation_request:AudioTranslationRequestIn):
-    api_logger.logger.info("Translate audio called")
-    b64_audio = translation_request.b64_audio
-
-    try:
-        decoded_audio = b64_decode_audio(b64_audio)
-
-        detected_language, translation = translate(decoded_audio)
-
-        api_logger.logger.info(f"Detected language: {detected_language}")
-        api_logger.logger.info(f"Translation: {translation}")
-        response = AudioTranslationRequestOut(
-            detected_language=detected_language,
-            translation=translation,
-            errors={"Errors": "None"},
-        )
-        return response
-    except Exception as e:
-        api_logger.logger.error("Audio translation failed")
-        api_logger.logger.exception(e)
-        error = {
-            "error": str(e),
-        }
-        response = AudioTranslationRequestOut(
-            detected_language="", translation="", errors=error
-        )
-        return response
-
-@app.post(
-    "/translate-audio-upload",
-    response_model=AudioTranslationRequestOut,
-    tags=["translate_audio"],
-)
-def translate_audio(file: bytes = File(...)):
-    api_logger.logger.info("Translate audio called")
-
-    try:
-        
-
-        detected_language, translation = translate(decoded_audio)
-
-        api_logger.logger.info(f"Detected language: {detected_language}")
-        api_logger.logger.info(f"Translation: {translation}")
-        response = AudioTranslationRequestOut(
-            detected_language=detected_language,
-            translation=translation,
-            errors={"Errors": "None"},
-        )
-        return response
-    except Exception as e:
-        api_logger.logger.error("Audio translation failed")
-        api_logger.logger.exception(e)
-        error = {
-            "error": str(e),
-        }
-        response = AudioTranslationRequestOut(
-            detected_language="", translation="", errors=error
+        response = DetectionResponseOut(
+            detection_result=[{"ERROR": "An error occurred"}], errors=result
         )
         return response

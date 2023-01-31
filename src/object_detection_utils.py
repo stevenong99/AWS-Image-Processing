@@ -2,7 +2,9 @@ import torch
 
 from configs import RESOURCES
 
-YOLO_MODEL = torch.hub.load("ultralytics/yolov5", "yolov5x", force_reload=True, verbose=False)
+YOLO_MODEL = torch.hub.load(
+    "ultralytics/yolov5", "yolov5x", force_reload=True, verbose=False
+)
 
 
 def detect_objects(image, save=False):
@@ -10,7 +12,7 @@ def detect_objects(image, save=False):
     and return a dict containing each object's details
 
     Args:
-        image (PIL.Image): image to be processed 
+        image (PIL.Image): image to be processed
 
     Returns:
         dict: containing bbox coordinates and name of objects found in the image
@@ -21,15 +23,20 @@ def detect_objects(image, save=False):
         ]
     """
 
+    # Using the model to process the image
     results = YOLO_MODEL(image)
 
     # Saves the resulting image to "res/runs/exp#", for debugging purposes
     if save:
-        results.save(save_dir=str(RESOURCES/"runs"/"exp"))
+        results.save(save_dir=str(RESOURCES / "runs" / "exp"))
 
+    # Converting the prediction into a dictionary
     results = results.pandas().xyxy[0].to_dict(orient="records")
 
-    if not results: # If the model could not detect anything
-        results = [{"detection_result": "Model could not detect any object in the image"}]
+    # If the model could not detect anything
+    if not results:
+        results = [
+            {"detection_result": "Model could not detect any object in the image"}
+        ]
 
     return results
